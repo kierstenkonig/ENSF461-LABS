@@ -1,0 +1,2 @@
+Executing command: var (null) echo -n hello 
+var

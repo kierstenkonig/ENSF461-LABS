@@ -1,0 +1,8 @@
+mkdir test4.folder
+touch test4.folder/file1
+touch test4.folder/file2
+touch test4.folder/document
+ls test4.folder | grep file > myfile.txt
+cat myfile.txt
+rm -fr test4.folder
+rm myfile.txt

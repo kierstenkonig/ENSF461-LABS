@@ -1,0 +1,9 @@
+mkdir myfolder
+echo "Hello, world" > myfolder/hello.txt
+echo "Hello, cat" > myfolder/hello.txt
+echo "Hello, dog" > myfolder/dog.txt
+grep world myfolder/hello.txt
+grep cat myfolder/hello.txt
+grep dog myfolder/dog.txt
+rm -fr myfolder/
+ls .

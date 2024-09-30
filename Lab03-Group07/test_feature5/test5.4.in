@@ -1,0 +1,4 @@
+var = echo olleh | rev
+echo $var > myfile.txt
+cat myfile.txt
+rm myfile.txt

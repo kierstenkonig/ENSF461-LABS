@@ -1,0 +1,8 @@
+var = echo -n 35
+echo $var
+var = expr $var + 2
+echo $var
+var = expr $var + 3
+echo $var
+var = expr $var + 5
+echo $var

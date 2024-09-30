@@ -1,0 +1,2 @@
+/usr/bin/ls -1 test1.folder/
+/usr/bin/grep "this is a test" "test1.folder/c.txt"

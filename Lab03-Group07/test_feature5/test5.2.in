@@ -1,0 +1,9 @@
+var = echo -n hello
+var = echo -n world
+echo -n "myfile.txt" > myfile.txt
+var2 = cat "myfile.txt"
+echo $var
+cat $var2
+echo " "
+echo done
+rm myfile.txt
