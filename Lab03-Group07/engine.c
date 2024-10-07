@@ -8,6 +8,14 @@
 #include <ctype.h>
 #include "parser.h"
 
+typedef struct Variable {
+    char *name;
+    char *value;
+    struct Variable *next;
+} Variable;
+
+Variable *var_list = NULL; // Global variable list
+
 int read_line(int infile, char *buffer, int maxlen)
 {
     int readlen = 0;
@@ -30,51 +38,123 @@ int read_line(int infile, char *buffer, int maxlen)
 }
 
 int normalize_executable(char **command) {
-    if (access(*command, F_OK) == 0) {
-        return TRUE;
+    if (strchr(*command, '/') != NULL) {
+        // If the command contains a '/', treat it as a path
+        return access(*command, X_OK) == 0;
     }
-    // Try common paths (e.g., /bin, /usr/bin)
-    char *paths[] = {"/bin/", "/usr/bin/", NULL};
+    
+    char *path = getenv("PATH");
+    char *path_copy = strdup(path);
+    char *dir = strtok(path_copy, ":");
     char fullpath[1024];
-    for (int i = 0; paths[i] != NULL; i++) {
-        snprintf(fullpath, sizeof(fullpath), "%s%s", paths[i], *command);
-        if (access(fullpath, F_OK) == 0) {
+    
+    while (dir != NULL) {
+        snprintf(fullpath, sizeof(fullpath), "%s/%s", dir, *command);
+        if (access(fullpath, X_OK) == 0) {
             *command = strdup(fullpath);
+            free(path_copy);
             return TRUE;
         }
+        dir = strtok(NULL, ":");
     }
-
+    
+    free(path_copy);
     return FALSE;
 }
 
 void update_variable(char* name, char* value) {
-    // Update or create a variable
-    setenv(name, value, 1); // Set environment variable
+    //takes the 2 parameters and will search the var_list for the existing variable
+    //note that memory leak is prevented by feeing up the old value
+
+    Variable *var = var_list;
+    while (var) {
+        if (strcmp(var->name, name) == 0) {
+            free(var->value);
+            var->value = strdup(value); //creates a new copy of the value and assigned to var
+            return;
+        }
+        var = var->next;
+    }
+    // If not found, create new variable
+    Variable *new_var = malloc(sizeof(Variable));
+    new_var->name = strdup(name); //name and value copied and stored in new struct and added to var_list
+    new_var->value = strdup(value);
+    new_var->next = var_list;
+    var_list = new_var;
 }
 
 char* lookup_variable(char* name) {
-    // Lookup a variable
-    if(getenv(name)){
-        return getenv(name);
+    Variable *var = var_list;
+    //iterates through the var_list and compares each variable in the list
+    //to the given name using the strcmp
+    //NULL returned if no match found
+    while (var) {
+        if (strcmp(var->name, name) == 0) {
+            return var->value;
+        }
+        var = var->next;
     }
-    else{
-        return NULL;
-    }
+    return NULL;
 }
 
 void execute_command(token_t** tokens, int numtokens) {
     int pipefd[2];
     int pipe_present = FALSE;
-    int pid;
+    int output_redirect = -1;
+    int pid, pid2;
     
     char *command[64];
     int cmd_idx = 0;
-    int output_redirect = -1;
+
+    // Check for variable assignment
+    if (numtokens > 2 && tokens[1]->type == TOKEN_ASSIGN) {
+        char output[1024] = {0};
+        int assignpipe[2];
+        if (pipe(assignpipe) == -1) {
+            perror("pipe");
+            return;
+        }
+        
+        pid = fork();
+        if (pid == 0) {
+            // Child process
+            close(assignpipe[0]);
+            dup2(assignpipe[1], STDOUT_FILENO);
+            close(assignpipe[1]);
+            
+            // Execute the command after '='
+            char *cmd[62];
+            int i;
+            for (i = 2; i < numtokens; i++) {
+                cmd[i-2] = tokens[i]->value;
+            }
+            cmd[i-2] = NULL;
+            execvp(cmd[0], cmd);
+            perror("execvp");
+            exit(1);
+        } else {
+            // Parent process
+            close(assignpipe[1]);
+            int nbytes = read(assignpipe[0], output, sizeof(output) - 1);
+            if (nbytes > 0) {
+                if (output[nbytes-1] == '\n') {
+                    output[nbytes-1] = '\0';
+                } else {
+                    output[nbytes] = '\0';
+                }
+            }
+            close(assignpipe[0]);
+            wait(NULL);
+        }
+        
+        update_variable(tokens[0]->value, output);
+        return;
+    }
 
     // Parse tokens and build the command array
     for (int i = 0; i < numtokens; i++) {
         if (tokens[i]->type == TOKEN_STRING) {
-            command[cmd_idx++] = tokens[i]->value;  // Add command string to command array
+            command[cmd_idx++] = tokens[i]->value;
         } else if (tokens[i]->type == TOKEN_PIPE) {
             pipe_present = TRUE;
             command[cmd_idx] = NULL; // Null-terminate left command
@@ -83,52 +163,21 @@ void execute_command(token_t** tokens, int numtokens) {
                 perror("Pipe error");
                 return;
             }
-            if ((pid = fork()) == 0) {
+            
+            pid = fork();
+            if (pid == 0) {
                 // Child process for left side of the pipe
-                dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
-                close(pipefd[0]); // Close unused read end of pipe
-                execvp(command[0], command); // Execute the left side command
+                close(pipefd[0]);
+                dup2(pipefd[1], STDOUT_FILENO);
+                close(pipefd[1]);
+                execvp(command[0], command);
                 perror("exec failed");
-                _exit(1);
-            } else {
-                // Parent process
-                close(pipefd[1]); // Close write end of pipe
-                cmd_idx = 0; // Reset command index for right-side command
-                i++; // Move to the next token for the right command
-                while (i < numtokens) {
-                    if (tokens[i]->type == TOKEN_STRING) {
-                        command[cmd_idx++] = tokens[i]->value; // Add right command to command array
-                    } else if (tokens[i]->type == TOKEN_REDIR) {
-                        // Handle output redirection
-                        output_redirect = open(tokens[++i]->value, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                        if (output_redirect < 0) {
-                            perror("Output redirection failed");
-                            return;
-                        }
-                    }
-                    i++;
-                }
-                command[cmd_idx] = NULL; // Null-terminate right command
-                // Execute the right side of the pipe
-                if ((pid = fork()) == 0) {
-                    dup2(pipefd[0], STDIN_FILENO); // Redirect stdin from pipe
-                    close(pipefd[0]); // Close read end of pipe
-                    if (output_redirect != -1) {
-                        dup2(output_redirect, STDOUT_FILENO); // Redirect stdout to file if needed
-                        close(output_redirect);
-                    }
-                    execvp(command[0], command); // Execute the right side command
-                    perror("exec failed");
-                    _exit(1);
-                }
-                // Wait for both child processes to finish
-                close(pipefd[0]); // Close read end of pipe in parent
-                wait(NULL); // Wait for left child
-                wait(NULL); // Wait for right child
-                return; // Exit after processing pipe command
+                exit(1);
             }
+            
+            // Reset for right side of pipe
+            cmd_idx = 0;
         } else if (tokens[i]->type == TOKEN_REDIR) {
-            // Output redirection detected
             output_redirect = open(tokens[++i]->value, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (output_redirect < 0) {
                 perror("Output redirection failed");
@@ -136,54 +185,78 @@ void execute_command(token_t** tokens, int numtokens) {
             }
         }
     }
+    command[cmd_idx] = NULL; // Null-terminate the command array
 
-    // Handle normal command execution if no pipe is present
-    if (!pipe_present) {
-        command[cmd_idx] = NULL; // Null-terminate the command array
-
-        if ((pid = fork()) == 0) {
-            // Child process
-            if (output_redirect != -1) {
-                dup2(output_redirect, STDOUT_FILENO);
-                close(output_redirect);
-            }
-            execvp(command[0], command); // Execute the command
-            perror("exec failed");
-            _exit(1);
+    // Execute the command (or right side of pipe)
+    pid2 = fork();
+    if (pid2 == 0) {
+        // Child process
+        if (pipe_present) {
+            close(pipefd[1]);
+            dup2(pipefd[0], STDIN_FILENO);
+            close(pipefd[0]);
         }
-        // Wait for child to finish
-        wait(NULL);
+        if (output_redirect != -1) {
+            dup2(output_redirect, STDOUT_FILENO);
+            close(output_redirect);
+        }
+        execvp(command[0], command);
+        perror("exec failed");
+        exit(1);
     }
+
+    // Parent process
+    if (pipe_present) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+    }
+    if (output_redirect != -1) {
+        close(output_redirect);
+    }
+    
+    // Wait for all child processes
+    while (wait(NULL) > 0);
 }
-
-typedef struct Variable {
-    char *name;
-    char *value;
-    struct Variable *next;
-} Variable;
-
-Variable *var_list = NULL; // Global variable list
-
 
 void expand_variables(token_t **tokens, int numtokens) {
+    //will first iterate through all tokens and only expand the 
+    //variables in string tokens or variables
     for (int i = 0; i < numtokens; i++) {
-        if (tokens[i]->type == TOKEN_VAR) {
-            char *var_name = tokens[i]->value + 1; // Skip the '$'
-            char *var_value = lookup_variable(var_name);
-            if (var_value) {
-                free(tokens[i]->value);
-                tokens[i]->value = strdup(var_value);
-                tokens[i]->type = TOKEN_STRING; // Change type to string
-            } else {
-                // If variable not found, consider handling it (e.g., set to empty)
-                free(tokens[i]->value);
-                tokens[i]->value = strdup(""); // Set to empty if not found
-                tokens[i]->type = TOKEN_STRING;
+        if (tokens[i]->type == TOKEN_STRING || tokens[i]->type == TOKEN_VAR) {
+            //space allocated before the while loop
+            char *expanded = malloc(1024);  // Allocate space for expanded string
+            expanded[0] = '\0';
+            char *start = tokens[i]->value;
+            char *dollar;
+            while ((dollar = strchr(start, '$')) != NULL) {
+                //looks continously for '$' in token
+                strncat(expanded, start, dollar - start);
+                // move start to just after the $
+                start = dollar + 1;
+
+                char var_name[256]; //extracts variable name
+                int j = 0;
+                while (isalnum(start[j]) || start[j] == '_') {
+                    var_name[j] = start[j];
+                    j++;
+                }
+                var_name[j] = '\0';
+                char *var_value = lookup_variable(var_name); //loopup_variable will look up the value of the variable
+                if (var_value) {
+                    //if variable exists, it's added to the expanded string
+                    strcat(expanded, var_value);
+                }
+                start += j; //moves the start to after the variable name
             }
+            //Adds remaining part of the orig string to after the last variable
+            strcat(expanded, start);
+            //Then replaces the orig token value with the version that's expanded
+            free(tokens[i]->value);
+            tokens[i]->value = expanded;
+            tokens[i]->type = TOKEN_STRING;
         }
     }
 }
-
 
 void free_variables() {
     Variable *current = var_list;
@@ -194,6 +267,8 @@ void free_variables() {
         free(temp->value);
         free(temp);
     }
+    //frees list
+    var_list = NULL;
 }
 
 int main(int argc, char *argv[]) {
@@ -211,15 +286,13 @@ int main(int argc, char *argv[]) {
     char buffer[1024];
     int readlen;
 
-    // Read file line by line
-    while( 1 ) {
-        // Load the next line
+    while (1) {
         readlen = read_line(infile, buffer, 1024);
-        if(readlen < 0) {
+        if (readlen < 0) {
             perror("Error reading input file");
             return -3;
         }
-        if(readlen == 0) {
+        if (readlen == 0) {
             break;
         }
 
@@ -227,28 +300,19 @@ int main(int argc, char *argv[]) {
         token_t** tokens = tokenize(buffer, readlen, &numtokens);
         assert(numtokens > 0);
 
-       if (numtokens > 2 && tokens[1]->type == TOKEN_ASSIGN) {
-        update_variable(tokens[0]->value, tokens[2]->value);
-        } else {
-            // Expand variables before executing the command
-            expand_variables(tokens, numtokens);
-            
-            // Normalize the command
+        // Expand variables
+        expand_variables(tokens, numtokens);
+
+        // Normalize the command (only for non-assignment commands)
+        if (!(numtokens > 2 && tokens[1]->type == TOKEN_ASSIGN)) {
             if (!normalize_executable(&tokens[0]->value)) {
                 fprintf(stderr, "Command not found: %s\n", tokens[0]->value);
                 continue;
             }
-
-            // Execute the command
-            execute_command(tokens, numtokens);
         }
-        // Run commands
-        // * Fork and execute commands
-        // * Handle pipes
-        // * Handle redirections
-        // * Handle pipes
-        // * Handle variable assignments
-        // TODO
+
+        // Execute the command
+        execute_command(tokens, numtokens);
 
         // Free tokens vector
         for (int ii = 0; ii < numtokens; ii++) {
@@ -259,9 +323,6 @@ int main(int argc, char *argv[]) {
     }
 
     close(infile);
-    
-    // Remember to deallocate anything left which was allocated dynamically
-    // (i.e., using malloc, realloc, strdup, etc.)
     free_variables();
 
     return 0;

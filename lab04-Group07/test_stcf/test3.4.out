@@ -1,0 +1,16 @@
+Execution trace with STCF:
+t=100: [Job 0] arrived at [100], ran for: [10]
+t=110: [Job 1] arrived at [110], ran for: [10]
+t=120: [Job 2] arrived at [110], ran for: [10]
+t=130: [Job 0] arrived at [100], ran for: [90]
+t=220: [Job 3] arrived at [220], ran for: [20]
+t=240: [Job 4] arrived at [220], ran for: [30]
+End of execution with STCF.
+Begin analyzing STCF:
+Job 0 -- Response time: 0  Turnaround: 120  Wait: 20
+Job 1 -- Response time: 0  Turnaround: 10  Wait: 0
+Job 2 -- Response time: 10  Turnaround: 20  Wait: 10
+Job 3 -- Response time: 0  Turnaround: 20  Wait: 0
+Job 4 -- Response time: 20  Turnaround: 50  Wait: 20
+Average -- Response: 6.00  Turnaround 44.00  Wait 10.00
+End analyzing STCF.
