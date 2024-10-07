@@ -1,0 +1,14 @@
+Execution trace with LT:
+t=0: [Job 0] arrived at [0], ran for: [5]
+t=5: [Job 0] arrived at [0], ran for: [5]
+t=50: [Job 1] arrived at [50], ran for: [5]
+t=55: [Job 1] arrived at [50], ran for: [5]
+t=100: [Job 2] arrived at [100], ran for: [5]
+t=105: [Job 2] arrived at [100], ran for: [5]
+End of execution with LT.
+Begin analyzing LT:
+Job 0 -- Response time: 0  Turnaround: 10  Wait: 0
+Job 1 -- Response time: 0  Turnaround: 10  Wait: 0
+Job 2 -- Response time: 0  Turnaround: 10  Wait: 0
+Average -- Response: 0.00  Turnaround 10.00  Wait 0.00
+End analyzing LT.

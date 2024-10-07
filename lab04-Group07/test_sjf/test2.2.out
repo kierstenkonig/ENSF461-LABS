@@ -1,0 +1,13 @@
+Execution trace with SJF:
+t=0: [Job 2] arrived at [0], ran for: [25]
+t=25: [Job 3] arrived at [1], ran for: [10]
+t=35: [Job 1] arrived at [0], ran for: [50]
+t=85: [Job 0] arrived at [0], ran for: [100]
+End of execution with SJF.
+Begin analyzing SJF:
+Job 0 -- Response time: 85  Turnaround: 185  Wait: 85
+Job 1 -- Response time: 35  Turnaround: 85  Wait: 35
+Job 2 -- Response time: 0  Turnaround: 25  Wait: 0
+Job 3 -- Response time: 24  Turnaround: 34  Wait: 24
+Average -- Response: 36.00  Turnaround 82.25  Wait 36.00
+End analyzing SJF.
