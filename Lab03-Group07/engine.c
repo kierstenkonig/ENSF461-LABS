@@ -5,12 +5,8 @@
 #include <sys/wait.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "parser.h"
-
-#define TRUE 1
-#define FALSE 0
-#define MAX_COMMANDS 128
-#define MAX_TOKENS 128
 
 int read_line(int infile, char *buffer, int maxlen)
 {
@@ -34,147 +30,169 @@ int read_line(int infile, char *buffer, int maxlen)
 }
 
 int normalize_executable(char **command) {
-    if (command[0][0] == '/') { // Absolute path
-        return TRUE;  
+    if (access(*command, F_OK) == 0) {
+        return TRUE;
     }
-
-    if (strchr(command[0], '/') != NULL) {   // Relative path
-        return TRUE;    
-    }
-    
-    char *path = getenv("PATH");  // Get the PATH variable   
-    char *path_copy = strdup(path);  // Copy the PATH variable for manipulating
-    char *directory = strtok(path_copy, ":"); // Get the first directory
-
-    while (directory != NULL) {     // Search for the command in each directory
-        char *full_path = malloc(strlen(directory) + strlen(command[0]) + 2); // Allocate memory for the full path
-        sprintf(full_path, "%s/%s", directory, command[0]);   // Create the full path
-        if (access(full_path, X_OK) == 0) {  // Check if the file is executable
-            command[0] = full_path; // Update the command    
-            free(path_copy);    // Free the memory
-            return TRUE;    
+    // Try common paths (e.g., /bin, /usr/bin)
+    char *paths[] = {"/bin/", "/usr/bin/", NULL};
+    char fullpath[1024];
+    for (int i = 0; paths[i] != NULL; i++) {
+        snprintf(fullpath, sizeof(fullpath), "%s%s", paths[i], *command);
+        if (access(fullpath, F_OK) == 0) {
+            *command = strdup(fullpath);
+            return TRUE;
         }
-        directory = strtok(NULL, ":");    
     }
-    
-    free(path_copy);    // Free the memory
-    return FALSE;      
+
+    return FALSE;
 }
 
 void update_variable(char* name, char* value) {
     // Update or create a variable
+    setenv(name, value, 1); // Set environment variable
 }
 
 char* lookup_variable(char* name) {
     // Lookup a variable
-    return NULL;
+    if(getenv(name)){
+        return getenv(name);
+    }
+    else{
+        return NULL;
+    }
 }
 
-void execute_command(char **command, int numtokens) {
-    pid_t pid = fork(); // Fork a new process
-    int fd_in = -1, fd_out = -1;
+void execute_command(token_t** tokens, int numtokens) {
+    int pipefd[2];
+    int pipe_present = FALSE;
+    int pid;
+    
+    char *command[64];
+    int cmd_idx = 0;
+    int output_redirect = -1;
 
-    if (pid < 0) {
-        perror("fork");
-        return;
-    }
+    // Parse tokens and build the command array
+    for (int i = 0; i < numtokens; i++) {
+        if (tokens[i]->type == TOKEN_STRING) {
+            command[cmd_idx++] = tokens[i]->value;  // Add command string to command array
+        } else if (tokens[i]->type == TOKEN_PIPE) {
+            pipe_present = TRUE;
+            command[cmd_idx] = NULL; // Null-terminate left command
 
-    if (pid == 0) { // Child process
-        // Debugging log
-        for (int i = 0; i < numtokens; i++) {
-            if (strcmp(command[i], ">") == 0) {
-                fd_out = open(command[i+1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                if (fd_out < 0) {
-                    perror("open");
-                    exit(1);
+            if (pipe(pipefd) < 0) {
+                perror("Pipe error");
+                return;
+            }
+            if ((pid = fork()) == 0) {
+                // Child process for left side of the pipe
+                dup2(pipefd[1], STDOUT_FILENO); // Redirect stdout to pipe
+                close(pipefd[0]); // Close unused read end of pipe
+                execvp(command[0], command); // Execute the left side command
+                perror("exec failed");
+                _exit(1);
+            } else {
+                // Parent process
+                close(pipefd[1]); // Close write end of pipe
+                cmd_idx = 0; // Reset command index for right-side command
+                i++; // Move to the next token for the right command
+                while (i < numtokens) {
+                    if (tokens[i]->type == TOKEN_STRING) {
+                        command[cmd_idx++] = tokens[i]->value; // Add right command to command array
+                    } else if (tokens[i]->type == TOKEN_REDIR) {
+                        // Handle output redirection
+                        output_redirect = open(tokens[++i]->value, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                        if (output_redirect < 0) {
+                            perror("Output redirection failed");
+                            return;
+                        }
+                    }
+                    i++;
                 }
-                dup2(fd_out, STDOUT_FILENO);
-                close(fd_out);
-                command[i] = NULL;
-                break;
-            } else if (strcmp(command[i], ">>") == 0) {
-                fd_out = open(command[i+1], O_WRONLY | O_CREAT | O_APPEND, 0644);
-                if (fd_out < 0) {
-                    perror("open");
-                    exit(1);
+                command[cmd_idx] = NULL; // Null-terminate right command
+                // Execute the right side of the pipe
+                if ((pid = fork()) == 0) {
+                    dup2(pipefd[0], STDIN_FILENO); // Redirect stdin from pipe
+                    close(pipefd[0]); // Close read end of pipe
+                    if (output_redirect != -1) {
+                        dup2(output_redirect, STDOUT_FILENO); // Redirect stdout to file if needed
+                        close(output_redirect);
+                    }
+                    execvp(command[0], command); // Execute the right side command
+                    perror("exec failed");
+                    _exit(1);
                 }
-                dup2(fd_out, STDOUT_FILENO);
-                close(fd_out);
-                command[i] = NULL;
-                break;
-            } else if (strcmp(command[i], "<") == 0) {
-                fd_in = open(command[i+1], O_RDONLY);
-                if (fd_in < 0) {
-                    perror("open");
-                    exit(1);
-                }
-                dup2(fd_in, STDIN_FILENO);
-                close(fd_in);
-                command[i] = NULL;
-                break;
+                // Wait for both child processes to finish
+                close(pipefd[0]); // Close read end of pipe in parent
+                wait(NULL); // Wait for left child
+                wait(NULL); // Wait for right child
+                return; // Exit after processing pipe command
             }
-        }
-
-        // Normalize command path
-        normalize_executable(command);
-
-        // Execute the command
-        execvp(command[0], command);
-        perror("execvp");
-        exit(1);
-    } else { // Parent process
-        // Wait for the child process to finish
-        int status;
-        waitpid(pid, &status, 0);
-    }
-
-    return;
-}
-
-void execute_piped_commands(char ***commands, int num_commands) {
-    int pipefds[2 * (num_commands - 1)];
-
-    // Create pipes for all but the last command
-    for (int i = 0; i < num_commands - 1; i++) {
-        if (pipe(pipefds + i * 2) < 0) {
-            perror("pipe");
-            exit(1);
-        }
-    }
-
-    for (int i = 0; i < num_commands; i++) {
-        pid_t pid = fork();
-        if (pid == 0) {  // Child process
-            // Set up input redirection from the previous pipe
-            if (i > 0) {
-                dup2(pipefds[(i - 1) * 2], STDIN_FILENO);
+        } else if (tokens[i]->type == TOKEN_REDIR) {
+            // Output redirection detected
+            output_redirect = open(tokens[++i]->value, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (output_redirect < 0) {
+                perror("Output redirection failed");
+                return;
             }
-            // Set up output redirection to the next pipe
-            if (i < num_commands - 1) {
-                dup2(pipefds[i * 2 + 1], STDOUT_FILENO);
-            }
-
-            // Close all pipes in the child
-            for (int j = 0; j < 2 * (num_commands - 1); j++) {
-                close(pipefds[j]);
-            }
-
-            // Execute the command
-            normalize_executable(commands[i]);
-            execvp(commands[i][0], commands[i]);
-            perror("execvp");
-            exit(1);
         }
     }
 
-    // Close all pipes in the parent
-    for (int i = 0; i < 2 * (num_commands - 1); i++) {
-        close(pipefds[i]);
-    }
+    // Handle normal command execution if no pipe is present
+    if (!pipe_present) {
+        command[cmd_idx] = NULL; // Null-terminate the command array
 
-    // Wait for all child processes to finish
-    for (int i = 0; i < num_commands; i++) {
+        if ((pid = fork()) == 0) {
+            // Child process
+            if (output_redirect != -1) {
+                dup2(output_redirect, STDOUT_FILENO);
+                close(output_redirect);
+            }
+            execvp(command[0], command); // Execute the command
+            perror("exec failed");
+            _exit(1);
+        }
+        // Wait for child to finish
         wait(NULL);
+    }
+}
+
+typedef struct Variable {
+    char *name;
+    char *value;
+    struct Variable *next;
+} Variable;
+
+Variable *var_list = NULL; // Global variable list
+
+
+void expand_variables(token_t **tokens, int numtokens) {
+    for (int i = 0; i < numtokens; i++) {
+        if (tokens[i]->type == TOKEN_VAR) {
+            char *var_name = tokens[i]->value + 1; // Skip the '$'
+            char *var_value = lookup_variable(var_name);
+            if (var_value) {
+                free(tokens[i]->value);
+                tokens[i]->value = strdup(var_value);
+                tokens[i]->type = TOKEN_STRING; // Change type to string
+            } else {
+                // If variable not found, consider handling it (e.g., set to empty)
+                free(tokens[i]->value);
+                tokens[i]->value = strdup(""); // Set to empty if not found
+                tokens[i]->type = TOKEN_STRING;
+            }
+        }
+    }
+}
+
+
+void free_variables() {
+    Variable *current = var_list;
+    while (current) {
+        Variable *temp = current;
+        current = current->next;
+        free(temp->name);
+        free(temp->value);
+        free(temp);
     }
 }
 
@@ -195,7 +213,6 @@ int main(int argc, char *argv[]) {
 
     // Read file line by line
     while( 1 ) {
-
         // Load the next line
         readlen = read_line(infile, buffer, 1024);
         if(readlen < 0) {
@@ -206,22 +223,25 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        char *pipe_commands[MAX_COMMANDS];
-        // Tokenize the line
-        int num_commands = 0;
-        char *cmd = strtok(buffer, "|");
+        int numtokens = 0;
+        token_t** tokens = tokenize(buffer, readlen, &numtokens);
+        assert(numtokens > 0);
 
-        // Parse token list
-        // * Organize tokens into command parameters
-        // * Check if command is a variable assignment
-        // * Check if command has a redirection
-        // * Expand variables if any
-        // * Normalize executables
-        // * Check if pipes are present
+       if (numtokens > 2 && tokens[1]->type == TOKEN_ASSIGN) {
+        update_variable(tokens[0]->value, tokens[2]->value);
+        } else {
+            // Expand variables before executing the command
+            expand_variables(tokens, numtokens);
+            
+            // Normalize the command
+            if (!normalize_executable(&tokens[0]->value)) {
+                fprintf(stderr, "Command not found: %s\n", tokens[0]->value);
+                continue;
+            }
 
-        // * Check if pipes are present
-        // TODO
-
+            // Execute the command
+            execute_command(tokens, numtokens);
+        }
         // Run commands
         // * Fork and execute commands
         // * Handle pipes
@@ -229,47 +249,20 @@ int main(int argc, char *argv[]) {
         // * Handle pipes
         // * Handle variable assignments
         // TODO
-        while (cmd != NULL) {
-            pipe_commands[num_commands++] = strdup(cmd);
-            cmd = strtok(NULL, "|");
-        }
 
-        // If there are pipes, handle them
-        if (num_commands > 1) {
-            char **commands[MAX_COMMANDS];
-            for (int i = 0; i < num_commands; i++) {
-                int numtokens;
-                token_t **tokens = tokenize(pipe_commands[i], strlen(pipe_commands[i]), &numtokens);
-                commands[i] = malloc((numtokens + 1) * sizeof(char *));
-                for (int j = 0; j < numtokens; j++) {
-                    commands[i][j] = tokens[j]->value;
-                }
-                commands[i][numtokens] = NULL;
-            }
-            execute_piped_commands(commands, num_commands);
-        } else {
-            // Handle a single command without pipes
-            int numtokens;
-            token_t **tokens = tokenize(buffer, readlen, &numtokens);
-            char *command[numtokens + 1];
-            for (int i = 0; i < numtokens; i++) {
-                command[i] = tokens[i]->value;
-            }
-            command[numtokens] = NULL;
-
-            execute_command(command, numtokens);
+        // Free tokens vector
+        for (int ii = 0; ii < numtokens; ii++) {
+            free(tokens[ii]->value);
+            free(tokens[ii]);
         }
-
-        // Free allocated memory for pipe commands
-        for (int i = 0; i < num_commands; i++) {
-            free(pipe_commands[i]);
-        }
+        free(tokens);
     }
 
     close(infile);
-
+    
     // Remember to deallocate anything left which was allocated dynamically
     // (i.e., using malloc, realloc, strdup, etc.)
+    free_variables();
 
     return 0;
 }
