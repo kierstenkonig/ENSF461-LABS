@@ -1,0 +1,8 @@
+Execution trace with STCF:
+t=0: [Job 0] arrived at [0], ran for: [10]
+t=10: [Job 1] arrived at [10], ran for: [10]
+t=20: [Job 2] arrived at [20], ran for: [60]
+t=80: [Job 1] arrived at [10], ran for: [70]
+t=150: [Job 0] arrived at [0], ran for: [90]
+t=300: [Job 3] arrived at [300], ran for: [50]
+End of execution with STCF.

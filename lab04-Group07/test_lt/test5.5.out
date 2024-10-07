@@ -1,0 +1,8 @@
+Execution trace with LT:
+t=0: [Job 0] arrived at [0], ran for: [5]
+t=5: [Job 0] arrived at [0], ran for: [5]
+t=50: [Job 1] arrived at [50], ran for: [5]
+t=55: [Job 1] arrived at [50], ran for: [5]
+t=100: [Job 2] arrived at [100], ran for: [5]
+t=105: [Job 2] arrived at [100], ran for: [5]
+End of execution with LT.
