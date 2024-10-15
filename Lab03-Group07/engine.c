@@ -8,6 +8,8 @@
 #include <ctype.h>
 #include "parser.h"
 
+//Group 07 - ENSF461 Lab 03
+
 int read_line(int infile, char *buffer, int maxlen)
 {
     int readlen = 0;
