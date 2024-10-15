@@ -29,13 +29,6 @@ int myinit(size_t size) {
     _arena_start = mmap(NULL, total_allocated_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     //PROT makes memory readable and writable
     
-    //if mmap fails prints error message
-    // if (_arena_start == MAP_FAILED) {
-    //     perror("mmap failed"); 
-    //     statusno = ERR_CALL_FAILED;
-    //     return statusno;
-    // }
-
     // Initialize the free list to the entire allocated memory block aka start of the memory pool
     free_list = (node_t*)_arena_start;
     free_list->size = total_allocated_size - sizeof(node_t); //set size of free block
@@ -71,10 +64,10 @@ void* myalloc(size_t size) {
     while (block != NULL) {
         if (block->is_free && block->size >= size) {
             // split the block if it's larger than needed
-            if (block->size > size + sizeof(node_t)) {
+            if (block->size > size +  sizeof(node_t)) {
                 node_t* new_block = (node_t*)((char*)block + sizeof(node_t) + size);
                 new_block->size = block->size - size - sizeof(node_t); //set size of new block to be remaining space after splitting
-                //new_block->is_free = 1;
+                new_block->is_free = 1;
                 new_block->fwd = block->fwd; //set fwd and bwd pointer of new block, links it into free list
                 new_block->bwd = block;
 
@@ -100,28 +93,26 @@ void myfree(void* ptr) {
     if (ptr == NULL) return; 
 
     node_t* block = (node_t*)((char*)ptr - sizeof(node_t)); //calculate allocation for block
+    block->is_free = 1;
 
-    //block is added back to the free list for future allocations
-    if (free_list != NULL) {
-        // insert block at the beginning of the free list
-        // will point forward to current free list head
-        block->fwd = free_list;  
-        block->bwd = NULL;
-
-        // update the previous head's backward link to new block
-        free_list->bwd = block;
-
-        // Updates the free list head to this block
-        free_list = block;
-    } else {
-        //set this block as the only node in the list
-        free_list = block;
-        block->fwd = NULL; 
-        block->bwd = NULL;
+    // Coalescing backward (prev block)
+    if (block->bwd != NULL && block->bwd->is_free) {
+        block->bwd->size += sizeof(node_t) + block->size;
+        block->bwd->fwd = block->fwd;
+        if (block->fwd != NULL) {
+            block->fwd->bwd = block->bwd;
+        }
+        block = block->bwd;
     }
 
-    block->is_free = 1; // Mark the block as free
+    // Coalescing forward (next block)
+    if (block->fwd != NULL && block->fwd->is_free) {
+        block->size += sizeof(node_t) + block->fwd->size;
+        block->fwd = block->fwd->fwd;
+        if (block->fwd != NULL) {
+            block->fwd->bwd = block;
+        }
+    }
 
     statusno = 0;
 }
-
