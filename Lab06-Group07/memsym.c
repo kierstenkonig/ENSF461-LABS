@@ -21,7 +21,6 @@ uint32_t *physical_memory;
 int offset_bits, pfn_bits, vpn_bits;
 
 // Initialize the memory simulator
-// Initialize the memory simulator
 void define(int off, int pfn, int vpn) {
     if (define_called) {
         fprintf(output_file, "Current PID: %d. Error: multiple calls to define in the same trace\n", current_pid);
