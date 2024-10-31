@@ -1,0 +1,2 @@
+Current PID: 0. Memory instantiation complete. OFF bits: 1. PFN bits: 2. VPN bits: 2
+Error: unknown command map
