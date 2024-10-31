@@ -109,13 +109,11 @@ char** tokenize_input(char* input) {
 // Map a virtual page number to a physical frame number
 void map(int vpn, int pfn) {
     fprintf(output_file, "Current PID: %d. Mapped virtual page number %d to physical frame number %d\n", current_pid, vpn, pfn);
-    // You can add additional functionality here, such as updating a page table if needed
 }
 
 // Unmap a virtual page number
 void unmap(int vpn) {
     fprintf(output_file, "Current PID: %d. Unmapped virtual page number %d\n", current_pid, vpn);
-    // Additional logic for unmapping can be added here if needed
 }
 
 
