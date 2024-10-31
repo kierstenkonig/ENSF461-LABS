@@ -1,2 +1,3 @@
 Current PID: 0. Memory instantiation complete. OFF bits: 1. PFN bits: 2. VPN bits: 2
-Error: unknown command map
+Current PID: 0. Mapped virtual page number 0 to physical frame number 0
+Current PID: 0. Error: unknown command store

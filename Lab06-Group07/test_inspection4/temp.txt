@@ -1,4 +1,4 @@
 Current PID: 0. Memory instantiation complete. OFF bits: 4. PFN bits: 6. VPN bits: 6
-Current PID: 0. Loaded immediate #26 into register r1
-Current PID: 0. Loaded immediate #43 into register r2
-Error: unknown command rinspect
+Current PID: 0. Loaded immediate 26 into register r1
+Current PID: 0. Loaded immediate 43 into register r2
+Current PID: 0. Error: unknown command rinspect

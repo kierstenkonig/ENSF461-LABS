@@ -54,6 +54,7 @@ void load(char* reg, char* src) {
     int reg_index;
     uint32_t value;
 
+    // Determine which register to load into
     if (strcmp(reg, "r1") == 0) {
         reg_index = 0;
     } else if (strcmp(reg, "r2") == 0) {
@@ -63,10 +64,11 @@ void load(char* reg, char* src) {
         exit(1);
     }
 
+    // Load immediate value
     if (src[0] == '#') {
         value = (uint32_t)atoi(src + 1);  // Skip '#' prefix for immediate value
         registers[current_pid][reg_index] = value;
-        fprintf(output_file, "Current PID: %d. Loaded immediate %s into register %s\n", current_pid, src, reg);
+        fprintf(output_file, "Current PID: %d. Loaded immediate %u into register %s\n", current_pid, value, reg);
     } else {
         fprintf(output_file, "Current PID: %d. Error: invalid source operand %s\n", current_pid, src);
         exit(1);
@@ -80,9 +82,8 @@ void add() {
     uint32_t result = r1_value + r2_value;
 
     registers[current_pid][0] = result;
-    fprintf(output_file, "Current PID: %d. Added register r1 (%u) to register r2 (%u). Result: %u\n", current_pid, r1_value, r2_value, result);
+    fprintf(output_file, "Current PID: %d. Added contents of registers r1 (%u) and r2 (%u). Result: %u\n", current_pid, r1_value, r2_value, result);
 }
-
 
 // Tokenize input for parsing
 char** tokenize_input(char* input) {
@@ -104,6 +105,20 @@ char** tokenize_input(char* input) {
 
     return tokens;
 }
+
+// Map a virtual page number to a physical frame number
+void map(int vpn, int pfn) {
+    fprintf(output_file, "Current PID: %d. Mapped virtual page number %d to physical frame number %d\n", current_pid, vpn, pfn);
+    // You can add additional functionality here, such as updating a page table if needed
+}
+
+// Unmap a virtual page number
+void unmap(int vpn) {
+    fprintf(output_file, "Current PID: %d. Unmapped virtual page number %d\n", current_pid, vpn);
+    // Additional logic for unmapping can be added here if needed
+}
+
+
 
 int main(int argc, char* argv[]) {
     const char usage[] = "Usage: memsym.out <strategy> <input trace> <output trace>\n";
@@ -131,7 +146,7 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Reached end of trace. Exiting...\n");
             break;
         }
-        
+
         // Ignore comment lines
         if (buffer[0] == '%') {
             continue;
@@ -148,28 +163,31 @@ int main(int argc, char* argv[]) {
             int pfn = atoi(tokens[2]);
             int vpn = atoi(tokens[3]);
             define(off, pfn, vpn);
-        } else if (strcmp(tokens[0], "ctxswitch") == 0) {
-            if (!define_called) {
-                fprintf(output_file, "Error: attempt to execute instruction before define\n");
-                exit(1);
-            }
-            int pid = atoi(tokens[1]);
-            ctxswitch(pid);
-        } else if (strcmp(tokens[0], "load") == 0) {
-            if (!define_called) {
-                fprintf(output_file, "Error: attempt to execute instruction before define\n");
-                exit(1);
-            }
-            load(tokens[1], tokens[2]);
-        } else if (strcmp(tokens[0], "add") == 0) {
-            if (!define_called) {
-                fprintf(output_file, "Error: attempt to execute instruction before define\n");
-                exit(1);
-            }
-            add();
         } else {
-            fprintf(output_file, "Error: unknown command %s\n", tokens[0]);
-            exit(1);
+            if (!define_called) {
+                fprintf(output_file, "Current PID: %d. Error: attempt to execute instruction before define\n", current_pid);
+                exit(1);
+            }
+            
+            // Handle other commands
+            if (strcmp(tokens[0], "ctxswitch") == 0) {
+                int pid = atoi(tokens[1]);
+                ctxswitch(pid);
+            } else if (strcmp(tokens[0], "load") == 0) {
+                load(tokens[1], tokens[2]);
+            } else if (strcmp(tokens[0], "add") == 0) {
+                add();
+            } else if (strcmp(tokens[0], "map") == 0) {
+                int vpn = atoi(tokens[1]);
+                int pfn = atoi(tokens[2]);
+                map(vpn, pfn);
+            } else if (strcmp(tokens[0], "unmap") == 0) {
+                int vpn = atoi(tokens[1]);
+                unmap(vpn);
+            } else {
+                fprintf(output_file, "Current PID: %d. Error: unknown command %s\n", current_pid, tokens[0]);
+                exit(1);
+            }
         }
 
         // Deallocate tokens
