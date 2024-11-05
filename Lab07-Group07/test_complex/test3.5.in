@@ -1,0 +1,21 @@
+set 0 10
+set 1 100
+set 2 1000
+set 3 10000
+set 4 100000
+set 5 1000000
+set 6 10000000
+pri 0
+pri 1
+pri 2
+pri 3
+pri 4
+pri 5
+pri 6
+pia 0
+pia 1
+pia 2
+pia 3
+pia 4
+pia 5
+pia 6

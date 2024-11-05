@@ -1,0 +1,10 @@
+set 0 1
+fib 0
+set 0 2
+fib 0
+set 0 3
+fib 0
+set 0 4
+fib 0
+set 0 5
+fib 0

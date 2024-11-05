@@ -1,0 +1,8 @@
+set 0 38
+set 1 38
+set 2 38
+set 3 38
+fib 0
+fib 1
+fib 2
+fib 3

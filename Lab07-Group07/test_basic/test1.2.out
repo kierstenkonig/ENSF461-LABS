@@ -1,0 +1,15 @@
+ctx 00: set to value 5
+ctx 00: set to value 10
+ctx 00: add 2 (result: 12)
+ctx 00: add 2 (result: 14)
+ctx 00: add 2 (result: 16)
+ctx 00: add 2 (result: 18)
+ctx 00: add 2 (result: 20)
+ctx 00: mul 3 (result: 60)
+ctx 00: div 20 (result: 3)
+ctx 00: mul 5 (result: 15)
+ctx 00: sub 1 (result: 14)
+ctx 00: sub 1 (result: 13)
+ctx 00: sub 1 (result: 12)
+ctx 00: sub 1 (result: 11)
+ctx 00: sub 1 (result: 10)

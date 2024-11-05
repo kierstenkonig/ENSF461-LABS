@@ -1,0 +1,6 @@
+ctx 00: set to value 0
+ctx 00: add 20 (result: 20)
+ctx 00: mul 3 (result: 60)
+ctx 01: set to value 1
+ctx 01: add 40 (result: 41)
+ctx 01: mul 5 (result: 205)

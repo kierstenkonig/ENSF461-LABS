@@ -1,0 +1,8 @@
+ctx 00: set to value 38
+ctx 00: fib (result: 39088169)
+ctx 01: set to value 38
+ctx 01: fib (result: 39088169)
+ctx 02: set to value 38
+ctx 02: fib (result: 39088169)
+ctx 03: set to value 38
+ctx 03: fib (result: 39088169)

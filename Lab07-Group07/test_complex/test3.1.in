@@ -1,0 +1,32 @@
+set 0 38
+set 1 38
+set 2 38
+set 3 38
+set 4 38
+set 5 38
+set 6 38
+set 7 38
+set 8 38
+set 9 38
+set 10 38
+set 11 38
+set 12 38
+set 13 38
+set 14 38
+set 15 38
+fib 0
+fib 1
+fib 2
+fib 3
+fib 4
+fib 5
+fib 6
+fib 7
+fib 8
+fib 9
+fib 10
+fib 11
+fib 12
+fib 13
+fib 14
+fib 15

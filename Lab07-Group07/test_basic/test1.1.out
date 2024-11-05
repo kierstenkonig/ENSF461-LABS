@@ -1,0 +1,4 @@
+ctx 00: set to value 5
+ctx 00: add 7 (result: 12)
+ctx 00: add 31 (result: 43)
+ctx 00: sub 1 (result: 42)

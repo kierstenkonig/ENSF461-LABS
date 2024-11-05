@@ -1,0 +1,12 @@
+ctx 00: set to value 1
+ctx 00: pia (result 4.000000000000000)
+ctx 00: set to value 2
+ctx 00: pia (result 2.666666666666667)
+ctx 00: set to value 5
+ctx 00: pia (result 3.339682539682540)
+ctx 00: set to value 10
+ctx 00: pia (result 3.041839618929403)
+ctx 00: set to value 100
+ctx 00: pia (result 3.131592903558554)
+ctx 00: set to value 1000
+ctx 00: pia (result 3.140592653839794)

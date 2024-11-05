@@ -1,0 +1,6 @@
+set 0 0
+set 1 1
+add 0 20
+mul 0 3
+add 1 40
+mul 1 5

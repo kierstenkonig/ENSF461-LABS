@@ -1,0 +1,10 @@
+ctx 00: set to value 1
+ctx 00: fib (result: 1)
+ctx 00: set to value 2
+ctx 00: fib (result: 1)
+ctx 00: set to value 3
+ctx 00: fib (result: 2)
+ctx 00: set to value 4
+ctx 00: fib (result: 3)
+ctx 00: set to value 5
+ctx 00: fib (result: 5)
